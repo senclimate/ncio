@@ -1,6 +1,11 @@
 
 # NCIO: NetCDF Input-Output
 
+## Note by Sen
+
+The unlimited axis size can be prescribed and cannot be append?
+
+
 Welcome to the ncio library.
 
 ## Test programs

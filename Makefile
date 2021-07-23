@@ -19,9 +19,9 @@ ifort ?= 0
 debug ?= 0 
 
 ## GFORTRAN OPTIONS (default) ##
-FC = gfortran
-LIB = /opt/local/lib
-INC = /opt/local/include
+FC = ifort
+LIB = /share/kkraid/zhaos/apps/netcdf4-intel2016/lib
+INC = /share/kkraid/zhaos/apps/netcdf4-intel2016/include
 # LIB = /usr/lib
 # INC = /usr/include
 

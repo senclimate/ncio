@@ -65,7 +65,7 @@ program test
     call nc_create(filename,overwrite=.TRUE.,netcdf4=.TRUE.)
     call nc_write_attr(filename,"title","Checkerboard output")
     call nc_write_attr(filename,"institution", &
-                       "Universidad Complutense de Madrid; Potsdam Institute for Climate Impact Research")
+"Universidad Complutense de Madrid; Potsdam Institute for Climate Impact Research")
 
     ! Write a projection map (not used) centered at [-39E,90N] and no easting or northing offset
     call nc_write_map(filename,"polar_stereographic",lambda=-39.d0,phi=90.d0,x_e=0.d0,y_n=0.d0) 
