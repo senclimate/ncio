@@ -43,9 +43,9 @@ module ncio
         character (len=NC_STRLEN), allocatable :: dims(:)
         integer, allocatable :: dlen(:), start(:), count(:)
         integer :: n, dimid, varid, ndims_in
-        double precision :: add_offset, scale_factor, missing_value, FillValue
+        double precision :: add_offset, scale_factor, FillValue
         double precision :: actual_range(2)
-        logical :: missing_set, FillValue_set
+        logical :: FillValue_set
         double precision, allocatable :: dim(:)
         logical :: coord
     end type
@@ -142,7 +142,7 @@ contains
     subroutine nc4_write_internal(filename,name,dat,xtype,size_in,&
                                   ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                   start,count,long_name,standard_name,grid_mapping,units, &
-                                  missing_value_int,missing_value_float,missing_value_double)
+                                  FillValue_int,FillValue_float,FillValue_double)
 
 
         implicit none
@@ -155,9 +155,9 @@ contains
 
         character (len=*) :: filename, name, xtype
         character (len=*),   optional :: long_name, standard_name, grid_mapping, units
-        integer,          optional :: missing_value_int
-        real(4),          optional :: missing_value_float
-        double precision, optional :: missing_value_double
+        integer,          optional :: FillValue_int
+        real(4),          optional :: FillValue_float
+        double precision, optional :: FillValue_double
         integer :: size_in(:)
         integer, allocatable :: size_var(:)
 
@@ -180,15 +180,15 @@ contains
         if ( present(grid_mapping) )  v%grid_mapping  = trim(grid_mapping)
         if ( present(units) )         v%units         = trim(units)
 
-        if (present(missing_value_int)) then
-            v%missing_set = .TRUE.
-            v%missing_value = dble(missing_value_int)
-        else if (present(missing_value_float)) then
-            v%missing_set = .TRUE.
-            v%missing_value = dble(missing_value_float)
-        else if (present(missing_value_double)) then
-            v%missing_set = .TRUE.
-            v%missing_value = missing_value_double
+        if (present(FillValue_int)) then
+            v%FillValue_set = .TRUE.
+            v%FillValue = dble(FillValue_int)
+        else if (present(FillValue_float)) then
+            v%FillValue_set = .TRUE.
+            v%FillValue = dble(FillValue_float)
+        else if (present(FillValue_double)) then
+            v%FillValue_set = .TRUE.
+            v%FillValue = FillValue_double
         end if
 
         ! Open the file in write mode from filename or ncid
@@ -267,9 +267,9 @@ contains
         end if
 
         ! Reset or initialize the actual range of the variable
-        if (v%missing_set) then
-            actual_range = [minval(dat,mask=dabs(dat-v%missing_value) .gt. NC_TOL), &
-                            maxval(dat,mask=dabs(dat-v%missing_value) .gt. NC_TOL)]
+        if (v%FillValue_set) then
+            actual_range = [minval(dat,mask=dabs(dat-v%FillValue) .gt. NC_TOL), &
+                            maxval(dat,mask=dabs(dat-v%FillValue) .gt. NC_TOL)]
         else 
             actual_range = [minval(dat),maxval(dat)]
         end if 
@@ -289,8 +289,8 @@ contains
 
         ! Modify the variable according to scale and offset (if working with real or double data)
         if (trim(v%xtype) .eq. "NF90_FLOAT" .or. trim(v%xtype) .eq. "NF90_DOUBLE") then
-            if (v%missing_set) then
-                where( dabs(dat-v%missing_value) .gt. NC_TOL ) dat = (dat-v%add_offset)/v%scale_factor
+            if (v%FillValue_set) then
+                where( dabs(dat-v%FillValue) .gt. NC_TOL ) dat = (dat-v%add_offset)/v%scale_factor
             else
                 ! Apply the scalar and offset if available
                 dat = (dat-v%add_offset)/v%scale_factor
@@ -359,7 +359,7 @@ contains
     !               (only one time step 'ndat' at a time)
     ! ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
     subroutine nc4_read_internal_numeric(filename,name,dat,size_in,start,count,xtype, &
-        missing_value_int,missing_value_float,missing_value_double, ncid, iostat)
+        FillValue_int,FillValue_float,FillValue_double, ncid, iostat)
 
         implicit none
 
@@ -372,9 +372,9 @@ contains
         double precision, dimension(:) :: dat
         integer :: size_in(:)
 
-        integer,          optional :: missing_value_int
-        real(4),          optional :: missing_value_float
-        double precision, optional :: missing_value_double
+        integer,          optional :: FillValue_int
+        real(4),          optional :: FillValue_float
+        double precision, optional :: FillValue_double
 
         double precision    :: tmp
         character (len=NC_STRLEN) :: tmpstr
@@ -439,16 +439,16 @@ contains
         ! associated with the file.
         if (.not. present(ncid)) call nc_check( nf90_close(nc_id) )
 
-        if (v%missing_set) then
-            where( dabs(dat-v%missing_value) .gt. NC_TOL ) dat = dat*v%scale_factor + v%add_offset
+        if (v%FillValue_set) then
+            where( dabs(dat-v%FillValue) .gt. NC_TOL ) dat = dat*v%scale_factor + v%add_offset
 
             ! Fill with user-desired missing value
-            if (present(missing_value_int)) &
-                where( dabs(dat-v%missing_value) .le. NC_TOL ) dat = dble(missing_value_int)
-            if (present(missing_value_float)) &
-                where( dabs(dat-v%missing_value) .le. NC_TOL ) dat = dble(missing_value_float)
-            if (present(missing_value_double)) &
-                where( dabs(dat-v%missing_value) .le. NC_TOL ) dat = dble(missing_value_double)
+            if (present(FillValue_int)) &
+                where( dabs(dat-v%FillValue) .le. NC_TOL ) dat = dble(FillValue_int)
+            if (present(FillValue_float)) &
+                where( dabs(dat-v%FillValue) .le. NC_TOL ) dat = dble(FillValue_float)
+            if (present(FillValue_double)) &
+                where( dabs(dat-v%FillValue) .le. NC_TOL ) dat = dble(FillValue_double)
 
         else
             ! Apply the scalar and offset if available
@@ -456,14 +456,14 @@ contains
               dat = dat*v%scale_factor + v%add_offset
         end if
 
-        ! Also eliminate crazy values (in case they are not handled by missing_value for some reason)
+        ! Also eliminate crazy values (in case they are not handled by FillValue for some reason)
         ! Fill with user-desired missing value
-        if (present(missing_value_int)) &
-            where( dabs(dat) .ge. NC_LIM ) dat = dble(missing_value_int)
-        if (present(missing_value_float)) &
-            where( dabs(dat) .ge. NC_LIM ) dat = dble(missing_value_float)
-        if (present(missing_value_double)) &
-            where( dabs(dat) .ge. NC_LIM ) dat = dble(missing_value_double)
+        if (present(FillValue_int)) &
+            where( dabs(dat) .ge. NC_LIM ) dat = dble(FillValue_int)
+        if (present(FillValue_float)) &
+            where( dabs(dat) .ge. NC_LIM ) dat = dble(FillValue_float)
+        if (present(FillValue_double)) &
+            where( dabs(dat) .ge. NC_LIM ) dat = dble(FillValue_double)
 
 !         write(*,"(a,a,a)") "ncio:: nc_read:: ",trim(filename)//" : ",trim(v%name)
 
@@ -540,10 +540,8 @@ contains
         v%add_offset    = 0.d0
         v%scale_factor  = 1.d0
         v%actual_range  = (/ 0.d0, 0.d0 /)
-        v%missing_set   = .TRUE.
-        v%missing_value = -9999d0
-        v%FillValue     = v%missing_value
-        v%FillValue_set = .TRUE.
+        v%FillValue_set = .True.
+        v%FillValue     = -32767.d0
 
         v%xtype = "NF90_DOUBLE"
         v%coord = .FALSE.
@@ -794,8 +792,8 @@ contains
         write(*,"(10x,a20,a1,2x,2e12.4)") "actual_range",":",  v%actual_range
         write(*,"(10x,a20,a1,2x,e12.4)")  "add_offset",":",    v%add_offset
         write(*,"(10x,a20,a1,2x,e12.4)")  "scale_factor",":",  v%scale_factor
-        write(*,"(10x,a20,a1,2x,e12.4)")  "missing_value",":", v%missing_value
-        write(*,"(10x,a20,a1,2x,L2)")     "missing_set",":",   v%missing_set
+        write(*,"(10x,a20,a1,2x,e12.4)")  "FillValue",":", v%FillValue
+        write(*,"(10x,a20,a1,2x,L2)")     "FillValue_set",":",   v%FillValue_set
         if (.not. trim(v%grid_mapping) .eq. "") &
             write(*,"(10x,a20,a1,2x,a)")      "grid_mapping",":",  trim(v%grid_mapping)
         write(*,*)
@@ -864,17 +862,6 @@ contains
                     if (v%scale_factor .ne. 1.d0 .and. v%add_offset .ne. 0.d0) then
                         call nc_check( nf90_put_att(ncid, v%varid, "scale_factor", v%scale_factor) )
                         call nc_check( nf90_put_att(ncid, v%varid, "add_offset",   v%add_offset) )
-                    end if
-
-                    if (v%missing_set) then
-                        select case(trim(v%xtype))
-                            case("NF90_INT")
-                                call nc_check( nf90_put_att(ncid, v%varid, "missing_value", int(v%missing_value)) )
-                            case("NF90_FLOAT")
-                                call nc_check( nf90_put_att(ncid, v%varid, "missing_value", real(v%missing_value)) )
-                            case("NF90_DOUBLE")
-                                call nc_check( nf90_put_att(ncid, v%varid, "missing_value", v%missing_value) )
-                        end select
                     end if
 
                     if (v%FillValue_set) then
@@ -1012,20 +999,10 @@ contains
                         stat = nc_check_att( nf90_get_att(ncid, v%varid, "add_offset", tmpi) )
                         if (stat .eq. noerr) v%add_offset = dble(tmpi)
 
-                        call nc_get_att_double(ncid,v%varid,"missing_value",v%missing_value,stat)
-                        if (stat .eq. noerr) v%missing_set = .TRUE.
-
                         stat = nc_check_att( nf90_get_att(ncid, v%varid, "_FillValue", tmpi) )
-                        if (stat .eq. noerr) then
+                        if (stat .eq. noerr) then 
                             v%FillValue = dble(tmpi)
                             v%FillValue_set = .TRUE.
-
-                            ! ajr, 2020-08-20 
-                            ! Overwrite missing value with Fillvalue, since missing_value 
-                            ! attribute has been deprecated. 
-                            v%missing_value = v%FillValue 
-                            v%missing_set   = .TRUE. 
-                            
                         end if
 
                     case DEFAULT
@@ -1038,9 +1015,6 @@ contains
 
                         stat = nc_check_att( nf90_get_att(ncid, v%varid, "add_offset", tmp) )
                         if (stat .eq. noerr) v%add_offset = tmp
-
-                        call nc_get_att_double(ncid,v%varid,"missing_value",v%missing_value,stat)
-                        if (stat .eq. noerr) v%missing_set = .TRUE.
 
                         stat = nc_check_att( nf90_get_att(ncid, v%varid, "_FillValue", tmp) )
                         if (stat .eq. noerr) then
@@ -1869,13 +1843,13 @@ contains
     !! @param grid_mapping name of the grid this variable is mapped on (optional)
     !! @param units NetCDF attribute of the units of the variable (optional)
     subroutine nc_write_int_pt(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         integer :: dat
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -1887,20 +1861,20 @@ contains
         call nc4_write_internal(filename,name,dble([dat]),"NF90_INT",shape([dat]), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_int=missing_value)
+                                FillValue_int=FillValue)
 
         return
 
     end subroutine nc_write_int_pt
 
     subroutine nc_write_int_1D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         integer :: dat(:)
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -1915,20 +1889,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_INT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_int=missing_value)
+                                FillValue_int=FillValue)
 
         return
 
     end subroutine nc_write_int_1D
 
     subroutine nc_write_int_2D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         integer :: dat(:,:)
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -1943,20 +1917,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_INT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_int=missing_value)
+                                FillValue_int=FillValue)
 
         return
 
     end subroutine nc_write_int_2D
 
     subroutine nc_write_int_3D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         integer :: dat(:,:,:)
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -1972,20 +1946,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_INT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_int=missing_value)
+                                FillValue_int=FillValue)
 
         return
 
     end subroutine nc_write_int_3D
 
     subroutine nc_write_int_4D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         integer :: dat(:,:,:,:)
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2000,20 +1974,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_INT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_int=missing_value)
+                                FillValue_int=FillValue)
 
         return
 
     end subroutine nc_write_int_4D
 
     subroutine nc_write_int_5D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         integer :: dat(:,:,:,:,:)
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2028,20 +2002,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_INT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_int=missing_value)
+                                FillValue_int=FillValue)
 
         return
 
     end subroutine nc_write_int_5D
 
     subroutine nc_write_int_6D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         integer :: dat(:,:,:,:,:,:)
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2056,7 +2030,7 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_INT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_int=missing_value)
+                                FillValue_int=FillValue)
 
         return
 
@@ -2069,13 +2043,13 @@ contains
 ! ================================
 
     subroutine nc_write_double_pt(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         double precision :: dat
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2087,20 +2061,20 @@ contains
         call nc4_write_internal(filename,name,dble([dat]),"NF90_DOUBLE",shape([dat]), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_double=missing_value)
+                                FillValue_double=FillValue)
 
         return
 
     end subroutine nc_write_double_pt
 
     subroutine nc_write_double_1D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         double precision :: dat(:)
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2115,20 +2089,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_DOUBLE",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_double=missing_value)
+                                FillValue_double=FillValue)
 
         return
 
     end subroutine nc_write_double_1D
 
     subroutine nc_write_double_2D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         double precision :: dat(:,:)
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2143,20 +2117,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_DOUBLE",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_double=missing_value)
+                                FillValue_double=FillValue)
 
         return
 
     end subroutine nc_write_double_2D
 
     subroutine nc_write_double_3D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         double precision :: dat(:,:,:)
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2172,20 +2146,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_DOUBLE",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_double=missing_value)
+                                FillValue_double=FillValue)
 
         return
 
     end subroutine nc_write_double_3D
 
     subroutine nc_write_double_4D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         double precision :: dat(:,:,:,:)
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2200,20 +2174,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_DOUBLE",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_double=missing_value)
+                                FillValue_double=FillValue)
 
         return
 
     end subroutine nc_write_double_4D
 
     subroutine nc_write_double_5D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         double precision :: dat(:,:,:,:,:)
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2228,20 +2202,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_DOUBLE",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_double=missing_value)
+                                FillValue_double=FillValue)
 
         return
 
     end subroutine nc_write_double_5D
 
     subroutine nc_write_double_6D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         double precision :: dat(:,:,:,:,:,:)
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2256,7 +2230,7 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_DOUBLE",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_double=missing_value)
+                                FillValue_double=FillValue)
 
         return
 
@@ -2269,13 +2243,13 @@ contains
 ! ================================
 
     subroutine nc_write_float_pt(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         real(4) :: dat
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2287,20 +2261,20 @@ contains
         call nc4_write_internal(filename,name,dble([dat]),"NF90_FLOAT",shape([dat]), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_float=missing_value)
+                                FillValue_float=FillValue)
 
         return
 
     end subroutine nc_write_float_pt
 
     subroutine nc_write_float_1D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         real(4) :: dat(:)
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2315,20 +2289,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_FLOAT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_float=missing_value)
+                                FillValue_float=FillValue)
 
         return
 
     end subroutine nc_write_float_1D
 
     subroutine nc_write_float_2D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         real(4) :: dat(:,:)
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2343,20 +2317,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_FLOAT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_float=missing_value)
+                                FillValue_float=FillValue)
 
         return
 
     end subroutine nc_write_float_2D
 
     subroutine nc_write_float_3D(filename,name,dat,dims,ncid,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         real(4) :: dat(:,:,:)
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2372,20 +2346,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_FLOAT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_float=missing_value)
+                                FillValue_float=FillValue)
 
         return
 
     end subroutine nc_write_float_3D
 
     subroutine nc_write_float_4D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         real(4) :: dat(:,:,:,:)
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2400,20 +2374,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_FLOAT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_float=missing_value)
+                                FillValue_float=FillValue)
 
         return
 
     end subroutine nc_write_float_4D
 
     subroutine nc_write_float_5D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         real(4) :: dat(:,:,:,:,:)
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2428,20 +2402,20 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_FLOAT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_float=missing_value)
+                                FillValue_float=FillValue)
 
         return
 
     end subroutine nc_write_float_5D
 
     subroutine nc_write_float_6D(filename,name,dat,ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6,start,count, &
-                                  long_name,standard_name,grid_mapping,units,missing_value)
+                                  long_name,standard_name,grid_mapping,units,FillValue)
 
         implicit none
 
         ! Arguments
         real(4) :: dat(:,:,:,:,:,:)
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         character (len=*) :: filename, name
         integer, optional :: start(:), count(:),ncid
@@ -2456,7 +2430,7 @@ contains
         call nc4_write_internal(filename,name,dat1D,"NF90_FLOAT",shape(dat), &
                                 ncid,dims,dim1,dim2,dim3,dim4,dim5,dim6, &
                                 start,count,long_name,standard_name,grid_mapping,units, &
-                                missing_value_float=missing_value)
+                                FillValue_float=FillValue)
 
         return
 
@@ -2689,7 +2663,7 @@ contains
     !! @param name name of the variable in NetCDF file to be read
     !! @param start vector of values specifying starting indices for reading data from each dimension
     !! @param count vector of values specifying how many values to read in each dimension
-    subroutine nc_read_int_pt(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_int_pt(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -2704,7 +2678,7 @@ contains
         integer :: dat
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_INT"
 
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         ! Allocate dat1D and store input data to faciliate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -2712,7 +2686,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,[1],start,count,xtype=xtype, &
-                                      missing_value_int=missing_value, ncid=ncid, iostat=iostat)
+                                      FillValue_int=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = int(dat1D(1))
@@ -2721,7 +2695,7 @@ contains
 
     end subroutine nc_read_int_pt
 
-    subroutine nc_read_int_1D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_int_1D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -2736,7 +2710,7 @@ contains
         integer :: dat(:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_INT"
 
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         ! Allocate dat1D and store input data to faciliate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -2744,7 +2718,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_int=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_int=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = int(dat1D)
@@ -2753,7 +2727,7 @@ contains
 
     end subroutine nc_read_int_1D
 
-    subroutine nc_read_int_2D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_int_2D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -2768,7 +2742,7 @@ contains
         integer :: dat(:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_INT"
 
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         ! Allocate dat4D and store input data to faciliate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -2776,7 +2750,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_int=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_int=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = int(reshape(dat1D,shape(dat)))
@@ -2785,7 +2759,7 @@ contains
 
     end subroutine nc_read_int_2D
 
-    subroutine nc_read_int_3D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_int_3D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -2800,7 +2774,7 @@ contains
         integer :: dat(:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_INT"
 
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         ! Allocate dat1D and store input data to faciliate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -2808,7 +2782,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_int=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_int=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = int(reshape(dat1D,shape(dat)))
@@ -2817,7 +2791,7 @@ contains
 
     end subroutine nc_read_int_3D
 
-    subroutine nc_read_int_4D(filename,name,dat,start,count,missing_value, ncid,iostat)
+    subroutine nc_read_int_4D(filename,name,dat,start,count,FillValue, ncid,iostat)
 
         implicit none
 
@@ -2832,7 +2806,7 @@ contains
         integer :: dat(:,:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_INT"
 
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         ! Allocate dat1D and store input data to faciliate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -2840,7 +2814,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-          missing_value_int=missing_value, ncid=ncid, iostat=iostat)
+          FillValue_int=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = int(reshape(dat1D,shape(dat)))
@@ -2849,7 +2823,7 @@ contains
 
     end subroutine nc_read_int_4D
 
-    subroutine nc_read_int_5D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_int_5D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -2864,7 +2838,7 @@ contains
         integer :: dat(:,:,:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_INT"
 
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -2872,7 +2846,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_int=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_int=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = int(reshape(dat1D,shape(dat)))
@@ -2881,7 +2855,7 @@ contains
 
     end subroutine nc_read_int_5D
 
-    subroutine nc_read_int_6D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_int_6D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -2896,7 +2870,7 @@ contains
         integer :: dat(:,:,:,:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_INT"
 
-        integer, optional :: missing_value
+        integer, optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -2904,7 +2878,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_int=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_int=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = int(reshape(dat1D,shape(dat)))
@@ -2919,7 +2893,7 @@ contains
 !
 ! ================================
 
-    subroutine nc_read_double_pt(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_double_pt(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -2934,7 +2908,7 @@ contains
         double precision :: dat
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_DOUBLE"
 
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -2942,7 +2916,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,[1],start,count,xtype=xtype, &
-                                      missing_value_double=missing_value, ncid=ncid, iostat=iostat)
+                                      FillValue_double=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = dble(dat1D(1))
@@ -2951,7 +2925,7 @@ contains
 
     end subroutine nc_read_double_pt
 
-    subroutine nc_read_double_1D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_double_1D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -2966,7 +2940,7 @@ contains
         double precision :: dat(:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_DOUBLE"
 
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -2974,7 +2948,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_double=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_double=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = dble(dat1D)
@@ -2983,7 +2957,7 @@ contains
 
     end subroutine nc_read_double_1D
 
-    subroutine nc_read_double_2D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_double_2D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -2998,7 +2972,7 @@ contains
         double precision :: dat(:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_DOUBLE"
 
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3006,7 +2980,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_double=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_double=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = dble(reshape(dat1D,shape(dat)))
@@ -3015,7 +2989,7 @@ contains
 
     end subroutine nc_read_double_2D
 
-    subroutine nc_read_double_3D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_double_3D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3030,7 +3004,7 @@ contains
         double precision :: dat(:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_DOUBLE"
 
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3038,7 +3012,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_double=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_double=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = dble(reshape(dat1D,shape(dat)))
@@ -3047,7 +3021,7 @@ contains
 
     end subroutine nc_read_double_3D
 
-    subroutine nc_read_double_4D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_double_4D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3062,7 +3036,7 @@ contains
         double precision :: dat(:,:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_DOUBLE"
 
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3070,7 +3044,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_double=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_double=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = dble(reshape(dat1D,shape(dat)))
@@ -3079,7 +3053,7 @@ contains
 
     end subroutine nc_read_double_4D
 
-    subroutine nc_read_double_5D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_double_5D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3094,7 +3068,7 @@ contains
         double precision :: dat(:,:,:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_DOUBLE"
 
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3102,7 +3076,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_double=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_double=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = dble(reshape(dat1D,shape(dat)))
@@ -3111,7 +3085,7 @@ contains
 
     end subroutine nc_read_double_5D
 
-    subroutine nc_read_double_6D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_double_6D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3126,7 +3100,7 @@ contains
         double precision :: dat(:,:,:,:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_DOUBLE"
 
-        double precision, optional :: missing_value
+        double precision, optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3134,7 +3108,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_double=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_double=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = dble(reshape(dat1D,shape(dat)))
@@ -3149,7 +3123,7 @@ contains
 !
 ! ================================
 
-    subroutine nc_read_float_pt(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_float_pt(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3164,7 +3138,7 @@ contains
         real(4) :: dat
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_FLOAT"
 
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3172,7 +3146,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,[1],start,count,xtype=xtype, &
-                                       missing_value_float=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_float=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = real(dat1D(1))
@@ -3181,7 +3155,7 @@ contains
 
     end subroutine nc_read_float_pt
 
-    subroutine nc_read_float_1D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_float_1D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3196,7 +3170,7 @@ contains
         real(4) :: dat(:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_FLOAT"
 
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3204,7 +3178,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_float=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_float=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = real(dat1D)
@@ -3213,7 +3187,7 @@ contains
 
     end subroutine nc_read_float_1D
 
-    subroutine nc_read_float_2D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_float_2D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3228,7 +3202,7 @@ contains
         real(4) :: dat(:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_FLOAT"
 
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3236,7 +3210,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_float=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_float=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = real(reshape(dat1D,shape(dat)))
@@ -3245,7 +3219,7 @@ contains
 
     end subroutine nc_read_float_2D
 
-    subroutine nc_read_float_3D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_float_3D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3260,7 +3234,7 @@ contains
         real(4) :: dat(:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_FLOAT"
 
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3268,7 +3242,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_float=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_float=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = real(reshape(dat1D,shape(dat)))
@@ -3277,7 +3251,7 @@ contains
 
     end subroutine nc_read_float_3D
 
-    subroutine nc_read_float_4D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_float_4D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3292,7 +3266,7 @@ contains
         real(4) :: dat(:,:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_FLOAT"
 
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3300,7 +3274,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_float=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_float=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = real(reshape(dat1D,shape(dat)))
@@ -3309,7 +3283,7 @@ contains
 
     end subroutine nc_read_float_4D
 
-    subroutine nc_read_float_5D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_float_5D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3324,7 +3298,7 @@ contains
         real(4) :: dat(:,:,:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_FLOAT"
 
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3332,7 +3306,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_float=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_float=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = real(reshape(dat1D,shape(dat)))
@@ -3341,7 +3315,7 @@ contains
 
     end subroutine nc_read_float_5D
 
-    subroutine nc_read_float_6D(filename,name,dat,start,count,missing_value, ncid, iostat)
+    subroutine nc_read_float_6D(filename,name,dat,start,count,FillValue, ncid, iostat)
 
         implicit none
 
@@ -3356,7 +3330,7 @@ contains
         real(4) :: dat(:,:,:,:,:,:)
         character(len=NC_STRLEN), parameter :: xtype    = "NF90_FLOAT"
 
-        real(4), optional :: missing_value
+        real(4), optional :: FillValue
 
         ! Allocate dat1D and store input data to facilitate calling internal write subroutine
         if (allocated(dat1D)) deallocate(dat1D)
@@ -3364,7 +3338,7 @@ contains
 
         ! Finally call the internal writing routine
         call nc4_read_internal_numeric(filename,name,dat1D,shape(dat),start,count,xtype=xtype, &
-                                       missing_value_float=missing_value, ncid=ncid, iostat=iostat)
+                                       FillValue_float=FillValue, ncid=ncid, iostat=iostat)
 
         ! Store data that was read from file in output array
         dat = real(reshape(dat1D,shape(dat)))

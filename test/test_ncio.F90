@@ -33,12 +33,15 @@ program test_ncio
     !! call nc_write_map(out_filename,"polar_stereographic",lambda=-39.d0,phi=90.d0,x_e=0.d0,y_n=0.d0) 
 
     ! Write the dimensions (p, x, y, z, time), defined inline
-    call nc_write_dim(out_filename,"lon",x=lon,units="degree_east", long_name="longitude")
-    call nc_write_dim(out_filename,"lat",x=lat,units="degree_north",long_name="latitude")
-    call nc_write_dim(out_filename,"time", x=[0, 1, 2], units="days since 1980-01-01 00:00:00", calendar="365_day", unlimited=.TRUE.)
-    call nc_write(out_filename, 'sst', reshape(sst,(/ix, il, 1/)), dims=['lon', 'lat', 'time'], count=[ix, il, 1], start=[1, 1, 1])
-    call nc_write(out_filename, 'sst', reshape(sst,(/ix, il, 1/)), dims=['lon', 'lat', 'time'], count=[ix, il, 4], start=[1, 1, 1])
+    call nc_write_dim(out_filename,"lon",  x=lon, units="degree_east", long_name="longitude", axis='X')
+    call nc_write_dim(out_filename,"lat",  x=lat, units="degree_north", long_name="latitude", axis='Y')
+    call nc_write_dim(out_filename,"time", x=[0.0], units="days since 1980-01-01 00:00:00", calendar="365_day", axis='T', unlimited=.true.)
+    call nc_write(out_filename, 'time', (/1, 2, 3/), dims=['time'], count=[3], start=[2])
 
-                    
+    call nc_write(out_filename, 'sst', sst, dims=['lon', 'lat', 'time'], count=[ix, il, 1], start=[1, 1, 1], FillValue=9.96921e+36)
+    call nc_write(out_filename, 'sst', sst, dims=['lon', 'lat', 'time'], count=[ix, il, 1], start=[1, 1, 2], FillValue=9.96921e+36)
+    call nc_write_attr(out_filename, 'sst', 'long_name', 'sea_surface_temperature')
+    call nc_write_attr(out_filename, 'sst', 'units', 'K')
+          
 
 end program
